@@ -18,6 +18,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.Output;
 import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
@@ -157,7 +158,7 @@ class EventTriggerTest {
         }
 
         @Override
-        public Optional<Execution> newExecution(WebhookContext context, Flow target, AbstractWebhookTrigger source, io.kestra.core.models.tasks.Output value) {
+        public Optional<Execution> newExecution(WebhookContext context, Flow target, AbstractWebhookTrigger source, Output value) {
             output = (EventTrigger.Output) value;
             return webhookService.newExecution(context, target, source, value);
         }

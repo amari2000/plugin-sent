@@ -19,7 +19,8 @@ class SentSleeperTest {
         var worker = new Thread(() ->
         {
             try {
-                SentSleeper.cancellable(() -> {
+                SentSleeper.cancellable(() ->
+                {
                     var cancelled = killed.get();
                     entered.countDown();
                     return cancelled;
