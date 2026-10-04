@@ -17,6 +17,7 @@ import io.kestra.plugin.sent.SentValidation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -102,16 +103,19 @@ public class SendMessage extends AbstractSentConnection implements RunnableTask<
     @PluginProperty(group = "execution")
     private Property<Boolean> sandbox = Property.ofValue(false);
 
-    @Schema(title = "Idempotency key", description = "Stable key for this logical send. Sent caches completed mutation responses for 24 hours.")
+    @Schema(
+        title = "Idempotency key",
+        description = "Stable key for this logical send. Sent caches completed mutation responses for 24 hours. The default `sent_{{ taskrun.id }}` reuses the cached response when the same task run is deliberately re-sent; use a new key for an intentional new send."
+    )
     @Builder.Default
     @PluginProperty(group = "reliability")
     private Property<String> idempotencyKey = Property.ofExpression("sent_{{ taskrun.id }}");
 
     @Override
     public SentTaskOutput run(RunContext runContext) throws Exception {
-        List<String> rRecipients = SentValidation.recipients(runContext.render(to).asList(String.class));
-        List<String> rChannels = SentValidation.channels(runContext.render(channels).asList(String.class));
-        String rText = runContext.render(text).as(String.class).orElse(null);
+        var rRecipients = SentValidation.recipients(runContext.render(to).asList(String.class));
+        var rChannels = SentValidation.channels(runContext.render(channels).asList(String.class));
+        var rText = runContext.render(text).as(String.class).orElse(null);
         rText = rText == null || rText.isBlank() ? null : rText;
 
         if ((rText == null) == (template == null)) {
@@ -127,7 +131,7 @@ public class SendMessage extends AbstractSentConnection implements RunnableTask<
             body.put("template", renderTemplate(runContext));
         }
         body.put("sandbox", runContext.render(sandbox).as(Boolean.class).orElse(false));
-        String rKey = SentValidation.idempotencyKey(runContext.render(idempotencyKey).as(String.class).orElse(null));
+        var rKey = SentValidation.idempotencyKey(runContext.render(idempotencyKey).as(String.class).orElse(null));
 
         try (var client = client(runContext)) {
             return SentTaskOutput.from(client.post(List.of("messages"), body, rKey));
@@ -135,8 +139,8 @@ public class SendMessage extends AbstractSentConnection implements RunnableTask<
     }
 
     private Map<String, Object> renderTemplate(RunContext runContext) throws Exception {
-        String rId = runContext.render(template.getId()).as(String.class).orElse(null);
-        String rName = runContext.render(template.getName()).as(String.class).orElse(null);
+        var rId = runContext.render(template.getId()).as(String.class).orElse(null);
+        var rName = runContext.render(template.getName()).as(String.class).orElse(null);
         rId = rId == null || rId.isBlank() ? null : rId;
         rName = rName == null || rName.isBlank() ? null : rName;
         if ((rId == null) == (rName == null)) {
@@ -148,7 +152,7 @@ public class SendMessage extends AbstractSentConnection implements RunnableTask<
         } else {
             rTemplate.put("name", rName);
         }
-        Map<String, Object> rParameters = runContext.render(template.getParameters()).asMap(String.class, Object.class);
+        var rParameters = runContext.render(template.getParameters()).asMap(String.class, Object.class);
         if (rParameters != null && !rParameters.isEmpty()) {
             rTemplate.put("parameters", rParameters);
         }
@@ -158,7 +162,7 @@ public class SendMessage extends AbstractSentConnection implements RunnableTask<
     @Builder
     @Getter
     @NoArgsConstructor
-    @lombok.AllArgsConstructor
+    @AllArgsConstructor
     public static class MessageTemplate {
         @Schema(title = "Template ID", description = "Sent template UUID. Mutually exclusive with name.")
         @PluginProperty(group = "main")

@@ -49,7 +49,7 @@ public class GetTemplate extends AbstractSentSingleTask implements RunnableTask<
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rId = SentValidation.required(runContext.render(templateId).as(String.class).orElse(null), "templateId");
+        var rId = SentValidation.required(runContext.render(templateId).as(String.class).orElse(null), "templateId");
         try (var client = client(runContext)) {
             return output(runContext, client.get(List.of("templates", rId), Map.of()).data());
         }

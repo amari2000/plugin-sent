@@ -74,19 +74,20 @@ public final class SentClient implements Closeable {
         Map<String, Object> query,
         Object body,
         String idempotencyKey) throws Exception {
-        String rIdempotencyKey = blankToNull(idempotencyKey);
+        var rIdempotencyKey = blankToNull(idempotencyKey);
         if (!method.equals("GET") && rIdempotencyKey == null) {
             throw new IllegalArgumentException("Sent mutations require a non-blank idempotency key.");
         }
-        boolean retrySafe = method.equals("GET") || rIdempotencyKey != null;
-        HttpRequest request = buildRequest(method, pathSegments, query, body, rIdempotencyKey);
+        var retrySafe = method.equals("GET") || rIdempotencyKey != null;
+        var request = buildRequest(method, pathSegments, query, body, rIdempotencyKey);
 
-        for (int attempt = 1; attempt <= retryPolicy.maxAttempts(); attempt++) {
+        for (var attempt = 1; attempt <= retryPolicy.maxAttempts(); attempt++) {
+            sleeper.checkCancelled();
             try {
-                HttpResponse<String> response = httpClient.request(request, String.class);
+                var response = httpClient.request(request, String.class);
                 return parse(response);
             } catch (HttpClientResponseException e) {
-                int status = e.getResponse() == null || e.getResponse().getStatus() == null ? 0 : e.getResponse().getStatus().getCode();
+                var status = e.getResponse() == null || e.getResponse().getStatus() == null ? 0 : e.getResponse().getStatus().getCode();
                 if (retrySafe && attempt < retryPolicy.maxAttempts() && retryableStatus(status)) {
                     retry(attempt, status, retryAfter(e));
                     continue;
@@ -97,15 +98,15 @@ public final class SentClient implements Closeable {
                     retry(attempt, 0, null);
                     continue;
                 }
-                throw networkError(method, rIdempotencyKey, e);
+                throw networkError(method, rIdempotencyKey);
             } catch (IllegalVariableEvaluationException e) {
                 throw e;
-            } catch (HttpClientException | RuntimeException e) {
+            } catch (HttpClientException e) {
                 if (retrySafe && attempt < retryPolicy.maxAttempts()) {
                     retry(attempt, 0, null);
                     continue;
                 }
-                throw networkError(method, rIdempotencyKey, e);
+                throw networkError(method, rIdempotencyKey);
             }
         }
 
@@ -118,7 +119,7 @@ public final class SentClient implements Closeable {
         Map<String, Object> query,
         Object body,
         String idempotencyKey) {
-        HttpRequest.HttpRequestBuilder builder = HttpRequest.builder()
+        var builder = HttpRequest.builder()
             .method(method)
             .uri(buildUri(pathSegments, query))
             .addHeader("Accept", "application/json")
@@ -139,12 +140,12 @@ public final class SentClient implements Closeable {
     }
 
     private URI buildUri(List<String> pathSegments, Map<String, Object> query) {
-        StringBuilder value = new StringBuilder(baseUri.toString());
-        for (String segment : pathSegments) {
+        var value = new StringBuilder(baseUri.toString());
+        for (var segment : pathSegments) {
             value.append('/').append(encode(segment));
         }
 
-        List<String> parameters = new ArrayList<>();
+        var parameters = new ArrayList<String>();
         if (query != null) {
             query.forEach((key, rawValue) ->
             {
@@ -160,7 +161,7 @@ public final class SentClient implements Closeable {
     }
 
     private SentResponse parse(HttpResponse<String> response) throws SentApiException {
-        String body = response.getBody();
+        var body = response.getBody();
         SentEnvelope envelope;
         try {
             envelope = body == null || body.isBlank() ? null : MAPPER.readValue(body, SentEnvelope.class);
@@ -169,10 +170,10 @@ public final class SentClient implements Closeable {
         }
 
         if (envelope == null || !Boolean.TRUE.equals(envelope.getSuccess())) {
-            SentEnvelope.Error error = envelope == null ? null : envelope.getError();
-            String requestId = requestId(envelope, response.getHeaders());
-            String message = error == null ? "Sent returned an unexpected response envelope." : safe(error.getMessage());
-            String code = error == null ? null : safe(error.getCode());
+            var error = envelope == null ? null : envelope.getError();
+            var requestId = requestId(envelope, response.getHeaders());
+            var message = error == null ? "Sent returned an unexpected response envelope." : safe(error.getMessage());
+            var code = error == null ? null : safe(error.getCode());
             throw new SentApiException(formatError(response.getStatus().getCode(), code, requestId, message), response.getStatus().getCode(), code, requestId);
         }
         if (envelope.getData() == null) {
@@ -189,32 +190,32 @@ public final class SentClient implements Closeable {
     }
 
     private SentApiException mapError(HttpClientResponseException exception) {
-        int status = exception.getResponse() == null || exception.getResponse().getStatus() == null ? 0 : exception.getResponse().getStatus().getCode();
-        String rawBody = rawBody(exception);
+        var status = exception.getResponse() == null || exception.getResponse().getStatus() == null ? 0 : exception.getResponse().getStatus().getCode();
+        var rawBody = rawBody(exception);
         SentEnvelope envelope = null;
         try {
             envelope = rawBody.isBlank() ? null : MAPPER.readValue(rawBody, SentEnvelope.class);
         } catch (JsonProcessingException ignored) {
-            // The safe fallback below intentionally omits an unstructured provider body.
         }
 
-        SentEnvelope.Error error = envelope == null ? null : envelope.getError();
-        String code = error == null ? null : safe(error.getCode());
-        String requestId = requestId(envelope, exception.getResponse() == null ? null : exception.getResponse().getHeaders());
-        String providerMessage = error == null ? defaultMessage(status) : safe(error.getMessage());
+        var error = envelope == null ? null : envelope.getError();
+        var code = error == null ? null : safe(error.getCode());
+        var requestId = requestId(envelope, exception.getResponse() == null ? null : exception.getResponse().getHeaders());
+        var providerMessage = error == null ? defaultMessage(status) : safe(error.getMessage());
         return new SentApiException(formatError(status, code, requestId, providerMessage), status, code, requestId);
     }
 
-    private SentApiException networkError(String method, String idempotencyKey, Throwable cause) {
-        String safety = method.equals("GET") || idempotencyKey != null
+    private SentApiException networkError(String method, String idempotencyKey) {
+        var safety = method.equals("GET") || idempotencyKey != null
             ? "The request is retry-safe with the same configuration."
             : "A timed-out mutation may have been accepted; do not retry it without an idempotency key.";
-        return new SentApiException("Could not reach the Sent API. Check connectivity and timeouts. " + safety, cause);
+        // Transport causes can contain request headers; keep them out of operator logs.
+        return new SentApiException("Could not reach the Sent API. Check connectivity and timeouts. " + safety, 0, null, null);
     }
 
     private void retry(int attempt, int status, Duration retryAfter) throws SentApiException {
-        Duration exponential = exponentialDelay(attempt);
-        Duration delay = retryAfter == null ? exponential : max(exponential, min(retryAfter, retryPolicy.maxInterval()));
+        var exponential = exponentialDelay(attempt);
+        var delay = retryAfter == null ? exponential : max(exponential, min(retryAfter, retryPolicy.maxInterval()));
         runContext.logger().warn(
             "Retrying a safe Sent API request after {} (attempt {}/{}); waiting {}",
             status == 0 ? "a network failure" : "HTTP " + status,
@@ -231,7 +232,7 @@ public final class SentClient implements Closeable {
     }
 
     private Duration exponentialDelay(int attempt) {
-        long multiplier = 1L << Math.min(Math.max(attempt - 1, 0), 30);
+        var multiplier = 1L << Math.min(Math.max(attempt - 1, 0), 30);
         Duration computed;
         try {
             computed = retryPolicy.initialInterval().multipliedBy(multiplier);
@@ -245,7 +246,7 @@ public final class SentClient implements Closeable {
         if (exception.getResponse() == null || exception.getResponse().getHeaders() == null) {
             return null;
         }
-        String value = header(exception.getResponse().getHeaders(), "Retry-After");
+        var value = header(exception.getResponse().getHeaders(), "Retry-After");
         if (value == null || value.isBlank()) {
             return null;
         }
@@ -253,7 +254,7 @@ public final class SentClient implements Closeable {
             return Duration.ofSeconds(Math.max(0, Long.parseLong(value.trim())));
         } catch (NumberFormatException ignored) {
             try {
-                Instant at = ZonedDateTime.parse(value.trim(), DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
+                var at = ZonedDateTime.parse(value.trim(), DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
                 return Duration.between(Instant.now(), at).isNegative() ? Duration.ZERO : Duration.between(Instant.now(), at);
             } catch (DateTimeParseException ignoredDate) {
                 return null;
@@ -262,12 +263,12 @@ public final class SentClient implements Closeable {
     }
 
     private String requestId(SentEnvelope envelope, HttpHeaders headers) {
-        String fromBody = envelope != null && envelope.getMeta() != null ? envelope.getMeta().getRequestId() : null;
+        var fromBody = envelope != null && envelope.getMeta() != null ? envelope.getMeta().getRequestId() : null;
         return blankToNull(fromBody) != null ? safe(fromBody) : safe(header(headers, "X-Request-Id"));
     }
 
     private String rawBody(HttpClientResponseException exception) {
-        Object body = exception.getResponse() == null ? null : exception.getResponse().getBody();
+        var body = exception.getResponse() == null ? null : exception.getResponse().getBody();
         return switch (body) {
             case null -> "";
             case byte[] bytes -> new String(bytes, StandardCharsets.UTF_8);
@@ -276,7 +277,7 @@ public final class SentClient implements Closeable {
     }
 
     private String formatError(int status, String code, String requestId, String providerMessage) {
-        List<String> context = new ArrayList<>();
+        var context = new ArrayList<String>();
         context.add("HTTP " + status);
         if (code != null) {
             context.add("code " + code);
@@ -291,7 +292,7 @@ public final class SentClient implements Closeable {
         if (value == null) {
             return null;
         }
-        String redacted = value
+        var redacted = value
             .replace(apiKey, "[redacted]")
             .replace(encode(apiKey), "[redacted]");
         return redacted.length() <= MAX_ERROR_LENGTH ? redacted : redacted.substring(0, MAX_ERROR_LENGTH) + "…";
@@ -339,7 +340,6 @@ public final class SentClient implements Closeable {
         try {
             httpClient.close();
         } catch (Exception e) {
-            // Avoid forwarding arbitrary transport exception text to operator logs.
             runContext.logger().warn("Failed to close the Sent HTTP client cleanly.");
         }
     }

@@ -70,9 +70,9 @@ public class UpdateContact extends AbstractSentConnection implements RunnableTas
 
     @Override
     public SentTaskOutput run(RunContext runContext) throws Exception {
-        String rId = SentValidation.required(runContext.render(contactId).as(String.class).orElse(null), "contactId");
-        String rChannel = runContext.render(defaultChannel).as(String.class).orElse(null);
-        Boolean rOptOut = runContext.render(optOut).as(Boolean.class).orElse(null);
+        var rId = SentValidation.required(runContext.render(contactId).as(String.class).orElse(null), "contactId");
+        var rChannel = runContext.render(defaultChannel).as(String.class).orElse(null);
+        var rOptOut = runContext.render(optOut).as(Boolean.class).orElse(null);
         if (rChannel == null && rOptOut == null) {
             throw new IllegalArgumentException("Set defaultChannel and/or optOut.");
         }
@@ -84,7 +84,7 @@ public class UpdateContact extends AbstractSentConnection implements RunnableTas
             body.put("opt_out", rOptOut);
         }
         body.put("sandbox", runContext.render(sandbox).as(Boolean.class).orElse(false));
-        String rKey = SentValidation.idempotencyKey(runContext.render(idempotencyKey).as(String.class).orElse(null));
+        var rKey = SentValidation.idempotencyKey(runContext.render(idempotencyKey).as(String.class).orElse(null));
         try (var client = client(runContext)) {
             return SentTaskOutput.from(client.patch(List.of("contacts", rId), body, rKey));
         }

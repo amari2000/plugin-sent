@@ -4,5 +4,4 @@ title: "Sent Templates"
 description: "List and inspect Sent message templates."
 body: "Filter templates by search text, status, or category; page automatically; and choose in-memory, first-row, count-only, or internal-storage outputs."
 videos: []
-createdBy: "Sent"
-managedBy: "Sent"
+partner: "Sent"

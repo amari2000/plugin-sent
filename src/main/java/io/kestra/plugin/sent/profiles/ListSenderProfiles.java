@@ -41,7 +41,7 @@ public class ListSenderProfiles extends AbstractSentListTask implements Runnable
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rSearch = runContext.render(search).as(String.class).orElse(null);
+        var rSearch = runContext.render(search).as(String.class).orElse(null);
         try (var client = client(runContext, false)) {
             return output(runContext, "sender_profiles", (page, pageSize) ->
             {

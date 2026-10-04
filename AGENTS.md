@@ -1,16 +1,47 @@
 # Kestra Sent Plugin
 
-Native Sent v3 tasks for Kestra 2.0 and Java 25. Public components live in the account, contacts, messages, numbers, profiles, templates, and triggers subpackages.
+## What
+
+- Provides plugin components under `io.kestra.plugin.sent`.
+- Includes classes such as `Example`, `Trigger`.
+
+## Why
+
+- What user problem does this solve? Teams need a concrete starting point for building and validating new Kestra plugins without recreating the same project scaffolding from scratch.
+- Why would a team adopt this plugin in a workflow? It gives plugin authors a ready-made reference repo they can adapt alongside their own build, test, and publishing workflow.
+- What operational/business outcome does it enable? It shortens plugin delivery time, reduces setup mistakes, and makes internal or partner plugin development more repeatable.
+
+## How
+
+### Architecture
+
+Single-module plugin. Source packages under `io.kestra.plugin`:
+
+- `sent`
+
+Infrastructure dependencies (Docker Compose services):
+
+- `app`
+
+### Key Plugin Classes
+
+- `io.kestra.plugin.sent.Example`
+
+### Project Structure
+
+```
+plugin-sent/
+├── src/main/java/io/kestra/plugin/sent/
+├── src/test/java/io/kestra/plugin/sent/
+├── build.gradle
+└── README.md
+```
 
 ## Local rules
 
-- Use Kestra's internal HTTP client and Jackson/FileSerde serializers.
-- Never log credentials, phone numbers, message content, signatures, or webhook bodies.
-- Require idempotency for mutations; examples and QA use sandbox mode.
-- Verify signatures over the exact webhook bytes before JSON parsing.
-- Keep all 13 tasks and the signed EventTrigger covered by unconditional tests.
-- Keep docs and metadata consistent with the implemented components.
+- Base the wording on the implemented packages and classes, not on template README text.
 
-Run `./gradlew clean spotlessCheck check lintPluginDocs shadowJar` on Java 25 before submitting changes.
+## References
 
-See https://kestra.io/docs/plugin-developer-guide/contribution-guidelines.
+- https://kestra.io/docs/plugin-developer-guide
+- https://kestra.io/docs/plugin-developer-guide/contribution-guidelines

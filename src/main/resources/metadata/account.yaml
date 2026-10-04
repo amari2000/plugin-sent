@@ -4,5 +4,4 @@ title: "Sent Account"
 description: "Read the authenticated Sent account and plan metadata."
 body: "Use GetAccount to verify credentials and retrieve account-level metadata without performing a mutation."
 videos: []
-createdBy: "Sent"
-managedBy: "Sent"
+partner: "Sent"

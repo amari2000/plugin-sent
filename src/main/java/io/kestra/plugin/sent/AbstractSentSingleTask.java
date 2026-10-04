@@ -30,7 +30,7 @@ public abstract class AbstractSentSingleTask extends AbstractSentConnection {
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH_ONE);
 
     protected SentFetchOutput output(RunContext runContext, Map<String, Object> row) throws Exception {
-        FetchType rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH_ONE);
+        var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH_ONE);
         return SentFetchSupport.single(runContext, rFetchType, row);
     }
 }

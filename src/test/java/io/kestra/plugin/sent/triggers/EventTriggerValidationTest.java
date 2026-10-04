@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.validations.ModelValidator;
+import io.kestra.core.utils.IdUtils;
 
 import jakarta.inject.Inject;
 
@@ -17,8 +18,8 @@ class EventTriggerValidationTest {
 
     @Test
     void shouldBeCompatibleWithKestraModelValidation() {
-        EventTrigger trigger = EventTrigger.builder()
-            .id(io.kestra.core.utils.IdUtils.create())
+        var trigger = EventTrigger.builder()
+            .id(IdUtils.create())
             .type(EventTrigger.class.getName())
             .key("local-key")
             .signingSecret(Property.ofValue("whsec_abcdef1234567890"))

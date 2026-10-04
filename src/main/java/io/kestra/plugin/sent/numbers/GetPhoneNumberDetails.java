@@ -49,7 +49,7 @@ public class GetPhoneNumberDetails extends AbstractSentSingleTask implements Run
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rPhone = SentValidation.e164(runContext.render(phoneNumber).as(String.class).orElse(null), "phoneNumber");
+        var rPhone = SentValidation.e164(runContext.render(phoneNumber).as(String.class).orElse(null), "phoneNumber");
         try (var client = client(runContext)) {
             return output(runContext, client.get(List.of("numbers", "lookup", rPhone), Map.of()).data());
         }

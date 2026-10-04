@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +13,11 @@ import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
+import io.kestra.core.http.HttpRequest;
+import io.kestra.core.http.HttpResponse;
 import io.kestra.core.http.client.HttpClient;
+import io.kestra.core.http.client.HttpClientException;
+import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.runners.RunContextFactory;
 
@@ -32,6 +37,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,6 +49,56 @@ class SentClientTest {
 
     @Inject
     private RunContextFactory runContextFactory;
+
+    @Test
+    void transportFailuresAreRetriedWithoutLeakingTheirCause() throws Exception {
+        var attempts = new AtomicInteger();
+        var delays = new ArrayList<Duration>();
+        var runContext = runContextFactory.of(Map.of());
+        try (var transport = new HttpClient(runContext, HttpConfiguration.builder().build()) {
+            @Override
+            public <T> HttpResponse<T> request(HttpRequest request, Class<T> type) throws HttpClientException {
+                attempts.incrementAndGet();
+                throw new HttpClientException("Transport exposed x-api-key: " + API_KEY) {
+                };
+            }
+        };
+            var client = new SentClient(
+                runContext, transport, URI.create("https://example.invalid/v3"),
+                API_KEY, null, new SentRetryPolicy(3, Duration.ofMillis(1), Duration.ofSeconds(5)), delays::add
+            )
+        ) {
+            var error = assertThrows(SentApiException.class, () -> client.get(List.of("me"), Map.of()));
+            assertFalse(error.getMessage().contains(API_KEY));
+            assertNull(error.getCause());
+        }
+        assertEquals(3, attempts.get());
+        assertEquals(2, delays.size());
+    }
+
+    @Test
+    void programmingErrorsAreNotRetriedOrRelabeled() throws Exception {
+        var expected = new IllegalStateException("programming error");
+        var attempts = new AtomicInteger();
+        var delays = new ArrayList<Duration>();
+        var runContext = runContextFactory.of(Map.of());
+        try (var transport = new HttpClient(runContext, HttpConfiguration.builder().build()) {
+            @Override
+            public <T> HttpResponse<T> request(HttpRequest request, Class<T> type) {
+                attempts.incrementAndGet();
+                throw expected;
+            }
+        };
+            var client = new SentClient(
+                runContext, transport, URI.create("https://example.invalid/v3"),
+                API_KEY, null, new SentRetryPolicy(3, Duration.ofMillis(1), Duration.ofSeconds(5)), delays::add
+            )
+        ) {
+            assertSame(expected, assertThrows(IllegalStateException.class, () -> client.get(List.of("me"), Map.of())));
+        }
+        assertEquals(1, attempts.get());
+        assertTrue(delays.isEmpty());
+    }
 
     @Test
     void getAddsAuthProfileAndParsesMetadata(WireMockRuntimeInfo info) throws Exception {
@@ -60,7 +117,7 @@ class SentClientTest {
         try (var client = client(info, "profile-1", 1, ignored ->
         {
         })) {
-            SentResponse response = client.get(List.of("contacts"), Map.of("page", 2, "page_size", 25));
+            var response = client.get(List.of("contacts"), Map.of("page", 2, "page_size", 25));
             assertEquals("req-body", response.requestId());
             assertEquals(200, response.statusCode());
             assertFalse(response.idempotentReplayed());
@@ -83,7 +140,7 @@ class SentClientTest {
         try (var client = client(info, null, 1, ignored ->
         {
         })) {
-            SentResponse response = client.post(
+            var response = client.post(
                 List.of("messages"),
                 Map.of("to", List.of("+12025550123"), "sandbox", true),
                 "order_123"
@@ -149,7 +206,7 @@ class SentClientTest {
         try (var client = client(info, null, 1, ignored ->
         {
         })) {
-            SentApiException exception = assertThrows(SentApiException.class, () -> client.get(List.of("me"), Map.of()));
+            var exception = assertThrows(SentApiException.class, () -> client.get(List.of("me"), Map.of()));
             assertEquals(401, exception.getStatusCode());
             assertEquals("AUTH_001", exception.getErrorCode());
             assertEquals("req-auth", exception.getRequestId());
@@ -164,7 +221,7 @@ class SentClientTest {
         try (var client = client(info, null, 1, ignored ->
         {
         })) {
-            SentApiException exception = assertThrows(SentApiException.class, () -> client.get(List.of("me"), Map.of()));
+            var exception = assertThrows(SentApiException.class, () -> client.get(List.of("me"), Map.of()));
             assertTrue(exception.getMessage().contains("unexpected response envelope"));
         }
     }

@@ -38,17 +38,17 @@ public abstract class AbstractSentListTask extends AbstractSentConnection {
 
     @Schema(
         title = "Fetch type",
-        description = "`FETCH_ONE` returns the first resource, `FETCH` returns all resources, `STORE` streams all resources to internal storage, and `NONE` returns only the count."
+        description = "Defaults to `STORE` to avoid large execution outputs. `FETCH_ONE` returns the first resource, `FETCH` returns all resources, `STORE` streams all resources to internal storage, and `NONE` returns only the count."
     )
     @Builder.Default
     @PluginProperty(group = "execution")
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
 
     protected SentFetchOutput output(RunContext runContext, String itemKey, SentFetchSupport.PageLoader loader) throws Exception {
-        int rPage = runContext.render(page).as(Integer.class).orElse(1);
-        int rPageSize = runContext.render(pageSize).as(Integer.class).orElse(100);
-        int rMaxPages = runContext.render(maxPages).as(Integer.class).orElse(1000);
-        FetchType rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH);
+        var rPage = runContext.render(page).as(Integer.class).orElse(1);
+        var rPageSize = runContext.render(pageSize).as(Integer.class).orElse(100);
+        var rMaxPages = runContext.render(maxPages).as(Integer.class).orElse(1000);
+        var rFetchType = runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
 
         if (rPage < 1 || rPageSize < 1 || rPageSize > 100 || rMaxPages < 1 || rMaxPages > 10000) {
             throw new IllegalArgumentException("page, pageSize, or maxPages is outside its documented range.");

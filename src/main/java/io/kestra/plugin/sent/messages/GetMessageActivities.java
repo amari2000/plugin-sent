@@ -49,7 +49,7 @@ public class GetMessageActivities extends AbstractSentSingleTask implements Runn
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rId = SentValidation.required(runContext.render(messageId).as(String.class).orElse(null), "messageId");
+        var rId = SentValidation.required(runContext.render(messageId).as(String.class).orElse(null), "messageId");
         try (var client = client(runContext)) {
             return output(runContext, client.get(List.of("messages", rId, "activities"), Map.of()).data());
         }

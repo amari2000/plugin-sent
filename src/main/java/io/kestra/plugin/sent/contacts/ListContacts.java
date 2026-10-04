@@ -51,9 +51,9 @@ public class ListContacts extends AbstractSentListTask implements RunnableTask<S
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rSearch = runContext.render(search).as(String.class).orElse(null);
-        String rChannel = runContext.render(channel).as(String.class).orElse(null);
-        String rPhone = runContext.render(phone).as(String.class).orElse(null);
+        var rSearch = runContext.render(search).as(String.class).orElse(null);
+        var rChannel = runContext.render(channel).as(String.class).orElse(null);
+        var rPhone = runContext.render(phone).as(String.class).orElse(null);
         try (var client = client(runContext)) {
             return output(runContext, "contacts", (page, pageSize) ->
             {

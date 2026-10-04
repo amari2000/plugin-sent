@@ -2,13 +2,15 @@ package io.kestra.plugin.sent;
 
 import java.util.Map;
 
+import io.kestra.core.models.tasks.Output;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
 @Builder
 @Getter
-public class SentTaskOutput implements io.kestra.core.models.tasks.Output {
+public class SentTaskOutput implements Output {
     @Schema(title = "Sent response data", description = "Provider resource data from the successful v3 response envelope.")
     private final Map<String, Object> data;
 

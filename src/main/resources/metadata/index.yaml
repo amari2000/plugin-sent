@@ -4,5 +4,4 @@ title: "Sent"
 description: "Native Kestra tasks and a signed webhook trigger for Sent omnichannel messaging."
 body: "Send idempotent messages, manage contacts, inspect messages and activities, browse templates and Sender Profiles, look up phone numbers, and start flows from HMAC-verified Sent webhooks. The plugin uses the Sent v3 API, optional Sender Profile scoping, bounded retry-safe requests, sandbox-aware mutations, FetchType outputs, and raw-body webhook verification."
 videos: []
-createdBy: "Sent"
-managedBy: "Sent"
+partner: "Sent"

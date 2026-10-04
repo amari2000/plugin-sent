@@ -38,13 +38,13 @@ public final class SentFetchSupport {
         PageLoader loader) throws Exception {
         var rows = fetchType == FetchType.FETCH ? new ArrayList<Map<String, Object>>() : null;
         var tempFile = fetchType == FetchType.STORE ? runContext.workingDir().createTempFile(".ion").toFile() : null;
-        long total = 0;
+        var total = 0L;
 
-        try (BufferedOutputStream stream = tempFile == null ? null : new BufferedOutputStream(new FileOutputStream(tempFile), FileSerde.BUFFER_SIZE)) {
-            int page = startPage;
-            for (int pagesRead = 0; pagesRead < maxPages; pagesRead++, page++) {
-                SentResponse response = loader.load(page, pageSize);
-                List<Map<String, Object>> items = items(response.data(), itemKey);
+        try (var stream = tempFile == null ? null : new BufferedOutputStream(new FileOutputStream(tempFile), FileSerde.BUFFER_SIZE)) {
+            var page = startPage;
+            for (var pagesRead = 0; pagesRead < maxPages; pagesRead++, page++) {
+                var response = loader.load(page, pageSize);
+                var items = items(response.data(), itemKey);
 
                 if (fetchType == FetchType.FETCH_ONE && !items.isEmpty()) {
                     return SentFetchOutput.builder().row(items.getFirst()).size(1L).build();
@@ -56,7 +56,7 @@ public final class SentFetchSupport {
                 }
                 total += items.size();
 
-                boolean hasMore = hasMore(response.data(), page, items);
+                var hasMore = hasMore(response.data(), page, items);
                 if (!hasMore) {
                     if (fetchType == FetchType.STORE) {
                         stream.flush();
@@ -90,11 +90,11 @@ public final class SentFetchSupport {
 
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> items(Map<String, Object> data, String itemKey) {
-        Object value = data.get(itemKey);
+        var value = data.get(itemKey);
         if (!(value instanceof List<?> list)) {
             throw new IllegalStateException("Sent response data did not contain a `" + itemKey + "` list.");
         }
-        for (Object item : list) {
+        for (var item : list) {
             if (!(item instanceof Map<?, ?>)) {
                 throw new IllegalStateException("Sent returned a non-object item in `" + itemKey + "`.");
             }
@@ -106,8 +106,8 @@ public final class SentFetchSupport {
         if (!(data.get("pagination") instanceof Map<?, ?> pagination)) {
             throw new IllegalStateException("Sent response data did not contain pagination metadata.");
         }
-        Object page = pagination.get("page");
-        Object hasMore = pagination.get("has_more");
+        var page = pagination.get("page");
+        var hasMore = pagination.get("has_more");
         if (!(page instanceof Number number) || number.intValue() != expectedPage) {
             throw new IllegalStateException("Sent returned malformed pagination: unexpected page number.");
         }

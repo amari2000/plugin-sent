@@ -2,6 +2,7 @@ package io.kestra.plugin.sent.triggers;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +12,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.kestra.core.async.AsyncOperationProcessedEvent;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.HttpResponse;
 import io.kestra.core.junit.annotations.KestraTest;
@@ -27,7 +27,6 @@ import io.kestra.plugin.core.trigger.AbstractWebhookTrigger;
 import io.kestra.plugin.core.trigger.WebhookContext;
 
 import jakarta.inject.Inject;
-import reactor.core.publisher.Mono;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -53,6 +52,31 @@ class EventTriggerTest {
         flow = Flow.builder().id("sent_" + IdUtils.create()).namespace("qa.sent").revision(1)
             .tasks(List.of()).triggers(List.of(trigger)).build();
         recording = new RecordingWebhookService();
+    }
+
+    @Test
+    void rejectsToleranceAboveOneHour() throws Exception {
+        trigger = EventTrigger.builder().id(trigger.getId()).type(EventTrigger.class.getName())
+            .key("test-url-key").signingSecret(Property.ofValue(SECRET))
+            .tolerance(Property.ofValue(Duration.ofHours(1).plusMillis(1))).build();
+        assertEquals(HttpResponse.Status.BAD_REQUEST, evaluate(BODY, BODY, Instant.now().getEpochSecond(), false).getStatus());
+        assertTrue(recording.started.isEmpty());
+    }
+
+    @Test
+    void acceptsToleranceAtOneHour() throws Exception {
+        trigger = EventTrigger.builder().id(trigger.getId()).type(EventTrigger.class.getName())
+            .key("test-url-key").signingSecret(Property.ofValue(SECRET))
+            .tolerance(Property.ofValue(Duration.ofHours(1))).build();
+        assertEquals(HttpResponse.Status.OK, evaluate(BODY, BODY, Instant.now().getEpochSecond(), false).getStatus());
+        assertEquals(1, recording.started.size());
+    }
+
+    @Test
+    void rejectsReplacementCharactersAfterHttpDecoding() throws Exception {
+        var body = BODY.replace("café", "\uFFFD");
+        assertEquals(HttpResponse.Status.BAD_REQUEST, evaluate(body, body, Instant.now().getEpochSecond(), false).getStatus());
+        assertTrue(recording.started.isEmpty());
     }
 
     @Test
@@ -139,9 +163,8 @@ class EventTriggerTest {
         }
 
         @Override
-        public Mono<AsyncOperationProcessedEvent> startExecution(Execution execution) {
+        public void startExecution(Execution execution) {
             started.add(execution);
-            return Mono.empty();
         }
     }
 }

@@ -44,7 +44,7 @@ class SentWebhookVerifierTest {
 
     @Test
     void rejectsStaleTimestamp() {
-        Clock later = Clock.fixed(Instant.ofEpochSecond(1_750_000_301L), ZoneOffset.UTC);
+        var later = Clock.fixed(Instant.ofEpochSecond(1_750_000_301L), ZoneOffset.UTC);
         assertEquals(
             SentWebhookVerifier.Result.STALE,
             SentWebhookVerifier.verify(SECRET, ID, TIMESTAMP, EXPECTED, BODY, Duration.ofMinutes(5), later)
@@ -53,7 +53,7 @@ class SentWebhookVerifierTest {
 
     @Test
     void acceptsTimestampAtBoundary() {
-        Clock boundary = Clock.fixed(Instant.ofEpochSecond(1_750_000_300L), ZoneOffset.UTC);
+        var boundary = Clock.fixed(Instant.ofEpochSecond(1_750_000_300L), ZoneOffset.UTC);
         assertEquals(
             SentWebhookVerifier.Result.VALID,
             SentWebhookVerifier.verify(SECRET, ID, TIMESTAMP, EXPECTED, BODY, Duration.ofMinutes(5), boundary)

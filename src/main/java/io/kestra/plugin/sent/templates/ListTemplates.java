@@ -51,9 +51,9 @@ public class ListTemplates extends AbstractSentListTask implements RunnableTask<
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rSearch = runContext.render(search).as(String.class).orElse(null);
-        String rStatus = runContext.render(status).as(String.class).orElse(null);
-        String rCategory = runContext.render(category).as(String.class).orElse(null);
+        var rSearch = runContext.render(search).as(String.class).orElse(null);
+        var rStatus = runContext.render(status).as(String.class).orElse(null);
+        var rCategory = runContext.render(category).as(String.class).orElse(null);
         try (var client = client(runContext)) {
             return output(runContext, "templates", (page, pageSize) ->
             {

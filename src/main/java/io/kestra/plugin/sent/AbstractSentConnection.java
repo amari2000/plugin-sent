@@ -4,10 +4,14 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import io.kestra.core.http.client.HttpClient;
 import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.http.client.configurations.TimeoutConfiguration;
+import io.kestra.core.models.WorkerJobLifecycle;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.Task;
@@ -17,6 +21,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -29,9 +34,20 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-public abstract class AbstractSentConnection extends Task {
+public abstract class AbstractSentConnection extends Task implements WorkerJobLifecycle {
     static final String DEFAULT_BASE_URL = "https://api.sent.dm/v3";
     private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1");
+
+    @JsonIgnore
+    @Getter(AccessLevel.NONE)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private final transient AtomicBoolean killed = new AtomicBoolean();
+
+    @Override
+    public void kill() {
+        killed.set(true);
+    }
 
     @Schema(
         title = "Sent API key",
@@ -90,19 +106,19 @@ public abstract class AbstractSentConnection extends Task {
     }
 
     protected SentClient client(RunContext runContext, boolean includeProfileScope) throws Exception {
-        String rApiKey = runContext.render(apiKey).as(String.class)
+        var rApiKey = runContext.render(apiKey).as(String.class)
             .orElseThrow(() -> new IllegalArgumentException("apiKey is required; configure a Sent API key using a Kestra secret."));
         if (rApiKey.isBlank()) {
             throw new IllegalArgumentException("Sent API key must not be blank.");
         }
 
-        URI rBaseUri = validateBaseUri(runContext.render(baseUrl).as(String.class).orElse(DEFAULT_BASE_URL));
-        String rProfileId = includeProfileScope ? optional(runContext.render(profileId).as(String.class).orElse(null)) : null;
-        Duration rConnectTimeout = positive(runContext.render(connectTimeout).as(Duration.class).orElse(Duration.ofSeconds(10)), "connectTimeout");
-        Duration rReadTimeout = positive(runContext.render(readTimeout).as(Duration.class).orElse(Duration.ofSeconds(30)), "readTimeout");
-        int rMaxAttempts = runContext.render(maxAttempts).as(Integer.class).orElse(3);
-        Duration rInitialRetryInterval = nonNegative(runContext.render(initialRetryInterval).as(Duration.class).orElse(Duration.ofSeconds(1)), "initialRetryInterval");
-        Duration rMaxRetryInterval = positive(runContext.render(maxRetryInterval).as(Duration.class).orElse(Duration.ofSeconds(30)), "maxRetryInterval");
+        var rBaseUri = validateBaseUri(runContext.render(baseUrl).as(String.class).orElse(DEFAULT_BASE_URL));
+        var rProfileId = includeProfileScope ? optional(runContext.render(profileId).as(String.class).orElse(null)) : null;
+        var rConnectTimeout = positive(runContext.render(connectTimeout).as(Duration.class).orElse(Duration.ofSeconds(10)), "connectTimeout");
+        var rReadTimeout = positive(runContext.render(readTimeout).as(Duration.class).orElse(Duration.ofSeconds(30)), "readTimeout");
+        var rMaxAttempts = runContext.render(maxAttempts).as(Integer.class).orElse(3);
+        var rInitialRetryInterval = nonNegative(runContext.render(initialRetryInterval).as(Duration.class).orElse(Duration.ofSeconds(1)), "initialRetryInterval");
+        var rMaxRetryInterval = positive(runContext.render(maxRetryInterval).as(Duration.class).orElse(Duration.ofSeconds(30)), "maxRetryInterval");
 
         if (rMaxAttempts < 1 || rMaxAttempts > 10) {
             throw new IllegalArgumentException("maxAttempts must be between 1 and 10.");
@@ -111,7 +127,7 @@ public abstract class AbstractSentConnection extends Task {
             throw new IllegalArgumentException("initialRetryInterval must not exceed maxRetryInterval.");
         }
 
-        HttpConfiguration configuration = HttpConfiguration.builder()
+        var configuration = HttpConfiguration.builder()
             .followRedirects(Property.ofValue(false))
             .timeout(
                 TimeoutConfiguration.builder()
@@ -121,7 +137,7 @@ public abstract class AbstractSentConnection extends Task {
             )
             .build();
 
-        HttpClient httpClient = HttpClient.builder()
+        var httpClient = HttpClient.builder()
             .runContext(runContext)
             .configuration(configuration)
             .build();
@@ -133,7 +149,7 @@ public abstract class AbstractSentConnection extends Task {
             rApiKey,
             rProfileId,
             new SentRetryPolicy(rMaxAttempts, rInitialRetryInterval, rMaxRetryInterval),
-            SentSleeper.THREAD_SLEEPER
+            SentSleeper.cancellable(killed::get)
         );
     }
 
@@ -145,8 +161,8 @@ public abstract class AbstractSentConnection extends Task {
             throw new IllegalArgumentException("baseUrl must be a valid absolute HTTP(S) URL.", e);
         }
 
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
+        var scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        var host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
         if (host.isBlank() || !(scheme.equals("https") || scheme.equals("http"))) {
             throw new IllegalArgumentException("baseUrl must be an absolute HTTP(S) URL with a host.");
         }

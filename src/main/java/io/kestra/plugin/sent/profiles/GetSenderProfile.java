@@ -49,7 +49,7 @@ public class GetSenderProfile extends AbstractSentSingleTask implements Runnable
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rId = SentValidation.required(runContext.render(senderProfileId).as(String.class).orElse(null), "senderProfileId");
+        var rId = SentValidation.required(runContext.render(senderProfileId).as(String.class).orElse(null), "senderProfileId");
         try (var client = client(runContext, false)) {
             return output(runContext, client.get(List.of("sender-profiles", rId), Map.of()).data());
         }

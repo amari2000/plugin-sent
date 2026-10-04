@@ -4,5 +4,4 @@ title: "Sent Contacts"
 description: "Create, update, fetch, and list Sent contacts."
 body: "Contact mutations support sandbox mode and stable idempotency keys; list operations automatically paginate and support FETCH, FETCH_ONE, STORE, and NONE outputs."
 videos: []
-createdBy: "Sent"
-managedBy: "Sent"
+partner: "Sent"

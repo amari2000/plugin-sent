@@ -55,7 +55,7 @@ public final class SentWebhookVerifier {
         } catch (RuntimeException e) {
             return Result.INVALID_SECRET;
         }
-        boolean equal = MessageDigest.isEqual(
+        var equal = MessageDigest.isEqual(
             expected.getBytes(StandardCharsets.US_ASCII),
             signature.getBytes(StandardCharsets.US_ASCII)
         );
@@ -67,16 +67,16 @@ public final class SentWebhookVerifier {
             throw new IllegalArgumentException("Invalid Sent webhook signing secret.");
         }
         try {
-            byte[] key = Base64.getDecoder().decode(secret.substring(PREFIX.length()));
+            var key = Base64.getDecoder().decode(secret.substring(PREFIX.length()));
             if (key.length == 0) {
                 throw new IllegalArgumentException("Invalid Sent webhook signing secret.");
             }
-            byte[] prefix = (webhookId + "." + timestamp + ".").getBytes(StandardCharsets.UTF_8);
+            var prefix = (webhookId + "." + timestamp + ".").getBytes(StandardCharsets.UTF_8);
             var signed = new ByteArrayOutputStream(prefix.length + rawBody.length);
             signed.writeBytes(prefix);
             signed.writeBytes(rawBody);
 
-            Mac mac = Mac.getInstance("HmacSHA256");
+            var mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
             return "v1," + Base64.getEncoder().encodeToString(mac.doFinal(signed.toByteArray()));
         } catch (IllegalArgumentException e) {

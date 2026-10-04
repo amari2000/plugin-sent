@@ -1,7 +1,6 @@
 package io.kestra.plugin.sent.triggers;
 
 import java.net.http.HttpHeaders;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -9,7 +8,6 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,14 +17,12 @@ import io.kestra.core.http.HttpResponse;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
-import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerOutput;
-import io.kestra.core.runners.RunContext;
+import io.kestra.core.queues.QueueException;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.core.trigger.AbstractWebhookTrigger;
 import io.kestra.plugin.core.trigger.WebhookContext;
-import io.kestra.plugin.core.trigger.WebhookInputRenderException;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -45,7 +41,7 @@ import reactor.core.publisher.Mono;
 @NoArgsConstructor
 @Schema(
     title = "Trigger a flow from a signed Sent webhook",
-    description = "Receives Sent events at Kestra's native webhook URL. It requires `X-Webhook-ID`, `X-Webhook-Timestamp`, and `X-Webhook-Signature`; verifies HMAC-SHA256 against the exact raw body in constant time; rejects stale deliveries; then parses and filters the event. Register the generated HTTPS URL manually in Sent."
+    description = "Receives Sent events at Kestra's native webhook URL. It requires `X-Webhook-ID`, `X-Webhook-Timestamp`, and `X-Webhook-Signature`; verifies HMAC-SHA256 in constant time before parsing and filtering the event. Kestra 1.3 supplies the body as a string: UTF-8 bytes are reconstructed without JSON reserialization. Non-UTF-8 charset declarations and U+FFFD replacement characters are rejected to prevent lossy decoding from changing signed bytes. Register the generated HTTPS URL manually in Sent."
 )
 @Plugin(examples = @Example(title = "Handle signed inbound-message events", full = true, code = """
     id: sent_inbound_events
@@ -80,15 +76,10 @@ public class EventTrigger extends AbstractWebhookTrigger implements TriggerOutpu
     @PluginProperty(group = "processing")
     private Property<List<String>> events = Property.ofValue(List.of("message.received"));
 
-    @Schema(title = "Replay tolerance", description = "Maximum absolute difference from `X-Webhook-Timestamp`. Sent recommends five minutes.")
+    @Schema(title = "Replay tolerance", description = "Maximum absolute difference from `X-Webhook-Timestamp`. Must be positive and at most one hour; Sent recommends five minutes.")
     @Builder.Default
     @PluginProperty(group = "reliability")
     private Property<Duration> tolerance = Property.ofValue(Duration.ofMinutes(5));
-
-    @Override
-    public FetchType getFetchType() {
-        return FetchType.FETCH;
-    }
 
     @Override
     public Mono<HttpResponse<?>> evaluate(WebhookContext context) throws Exception {
@@ -96,23 +87,26 @@ public class EventTrigger extends AbstractWebhookTrigger implements TriggerOutpu
             return Mono.just(HttpResponse.of(HttpResponse.Status.NOT_FOUND));
         }
 
-        RawBody rawBody = rawBody(context.request().getBody());
+        if (!usesUtf8(context.request().getHeaders())) {
+            return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
+        }
+        var rawBody = rawBody(context.request().getBody());
         if (rawBody == null) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
         }
 
-        RunContext runContext = context.webhookService().runContext(context.flow(), this);
-        String rSigningSecret = runContext.render(signingSecret).as(String.class).orElse(null);
-        Duration rTolerance = runContext.render(tolerance).as(Duration.class).orElse(Duration.ofMinutes(5));
-        if (rTolerance.isNegative() || rTolerance.isZero()) {
+        var runContext = context.webhookService().runContext(context.flow(), this);
+        var rSigningSecret = runContext.render(signingSecret).as(String.class).orElse(null);
+        var rTolerance = runContext.render(tolerance).as(Duration.class).orElse(Duration.ofMinutes(5));
+        if (rTolerance.isNegative() || rTolerance.isZero() || rTolerance.compareTo(Duration.ofHours(1)) > 0) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
         }
 
-        HttpHeaders headers = context.request().getHeaders();
-        String webhookId = header(headers, "X-Webhook-ID");
-        String timestamp = header(headers, "X-Webhook-Timestamp");
-        String signature = header(headers, "X-Webhook-Signature");
-        SentWebhookVerifier.Result verification = SentWebhookVerifier.verify(
+        var headers = context.request().getHeaders();
+        var webhookId = header(headers, "X-Webhook-ID");
+        var timestamp = header(headers, "X-Webhook-Timestamp");
+        var signature = header(headers, "X-Webhook-Signature");
+        var verification = SentWebhookVerifier.verify(
             rSigningSecret,
             webhookId,
             timestamp,
@@ -137,21 +131,21 @@ public class EventTrigger extends AbstractWebhookTrigger implements TriggerOutpu
         if (event == null) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
         }
-        String field = string(event.get("field"));
-        String eventName = string(event.get("event"));
-        String eventTimestamp = string(event.get("timestamp"));
+        var field = string(event.get("field"));
+        var eventName = string(event.get("event"));
+        var eventTimestamp = string(event.get("timestamp"));
         if (field == null || eventName == null || eventTimestamp == null || !(event.get("payload") instanceof Map<?, ?> rawPayload)) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
         }
 
-        List<String> selected = runContext.render(events).asList(String.class);
+        var selected = runContext.render(events).asList(String.class);
         if (!accepts(selected, field, eventName)) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.NO_CONTENT));
         }
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> payload = (Map<String, Object>) rawPayload;
-        Output output = Output.builder()
+        var payload = (Map<String, Object>) rawPayload;
+        var output = Output.builder()
             .field(field)
             .event(eventName)
             .timestamp(eventTimestamp)
@@ -160,19 +154,16 @@ public class EventTrigger extends AbstractWebhookTrigger implements TriggerOutpu
             .dedupeKey(dedupeKey(eventName, payload, rawBody.bytes()))
             .build();
 
-        Optional<Execution> maybeExecution;
-        try {
-            maybeExecution = context.webhookService().newExecution(context, context.flow(), this, output);
-        } catch (WebhookInputRenderException e) {
-            return Mono.just(HttpResponse.of(HttpResponse.Status.UNPROCESSABLE_ENTITY));
-        }
+        var maybeExecution = context.webhookService().newExecution(context, context.flow(), this, output);
         if (maybeExecution.isEmpty()) {
             return Mono.just(HttpResponse.of(HttpResponse.Status.NO_CONTENT));
         }
-        Execution execution = maybeExecution.get();
-        return context.webhookService().startExecution(execution)
-            .then(Mono.<HttpResponse<?>> just(HttpResponse.of(HttpResponse.Status.OK)))
-            .onErrorResume(ignored -> Mono.just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR)));
+        try {
+            context.webhookService().startExecution(maybeExecution.get());
+            return Mono.just(HttpResponse.of(HttpResponse.Status.OK));
+        } catch (QueueException e) {
+            return Mono.just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR));
+        }
     }
 
     static boolean accepts(List<String> selected, String field, String event) {
@@ -182,14 +173,36 @@ public class EventTrigger extends AbstractWebhookTrigger implements TriggerOutpu
 
     private static RawBody rawBody(HttpRequest.RequestBody body) {
         if (body instanceof HttpRequest.StringRequestBody text) {
-            Charset charset = text.getCharset() == null ? StandardCharsets.UTF_8 : text.getCharset();
+            var charset = text.getCharset() == null ? StandardCharsets.UTF_8 : text.getCharset();
+            // Kestra 1.3 decodes HTTP bodies before invoking plugins. Reject lossy
+            // decoding so replacement characters cannot hide modified wire bytes.
+            if (!StandardCharsets.UTF_8.equals(charset) || text.getContent().indexOf('\uFFFD') >= 0) {
+                return null;
+            }
             return new RawBody(text.getContent().getBytes(charset), text.getContent());
         }
         if (body instanceof HttpRequest.ByteArrayRequestBody bytes) {
-            Charset charset = bytes.getCharset() == null ? StandardCharsets.UTF_8 : bytes.getCharset();
+            var charset = bytes.getCharset() == null ? StandardCharsets.UTF_8 : bytes.getCharset();
             return new RawBody(bytes.getContent(), new String(bytes.getContent(), charset));
         }
         return null;
+    }
+
+    private static boolean usesUtf8(HttpHeaders headers) {
+        var contentType = header(headers, "Content-Type");
+        if (contentType == null) {
+            return true;
+        }
+        for (var parameter : contentType.split(";")) {
+            var pair = parameter.trim().split("=", 2);
+            if (pair.length == 2 && pair[0].trim().equalsIgnoreCase("charset")) {
+                var charset = pair[1].trim().replace("\"", "");
+                if (!charset.equalsIgnoreCase("utf-8") && !charset.equalsIgnoreCase("utf8")) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private static String header(HttpHeaders headers, String name) {
@@ -201,8 +214,8 @@ public class EventTrigger extends AbstractWebhookTrigger implements TriggerOutpu
     }
 
     private static String dedupeKey(String eventName, Map<String, Object> payload, byte[] rawBody) {
-        String messageId = string(payload.get("message_id"));
-        String status = string(payload.get("message_status"));
+        var messageId = string(payload.get("message_id"));
+        var status = string(payload.get("message_status"));
         if (messageId != null && status != null) {
             return "message:" + messageId + ":" + status;
         }

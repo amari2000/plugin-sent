@@ -66,12 +66,12 @@ public class CreateContact extends AbstractSentConnection implements RunnableTas
 
     @Override
     public SentTaskOutput run(RunContext runContext) throws Exception {
-        String rPhone = SentValidation.e164(runContext.render(phoneNumber).as(String.class).orElse(null), "phoneNumber");
-        String rChannel = runContext.render(defaultChannel).as(String.class).orElse(null);
+        var rPhone = SentValidation.e164(runContext.render(phoneNumber).as(String.class).orElse(null), "phoneNumber");
+        var rChannel = runContext.render(defaultChannel).as(String.class).orElse(null);
         if (rChannel != null) {
             rChannel = SentValidation.channels(List.of(rChannel)).getFirst();
         }
-        String rKey = SentValidation.idempotencyKey(runContext.render(idempotencyKey).as(String.class).orElse(null));
+        var rKey = SentValidation.idempotencyKey(runContext.render(idempotencyKey).as(String.class).orElse(null));
         var body = new LinkedHashMap<String, Object>();
         body.put("phone_number", rPhone);
         if (rChannel != null) {

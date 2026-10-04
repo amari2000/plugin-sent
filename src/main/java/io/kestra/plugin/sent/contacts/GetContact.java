@@ -49,7 +49,7 @@ public class GetContact extends AbstractSentSingleTask implements RunnableTask<S
 
     @Override
     public SentFetchOutput run(RunContext runContext) throws Exception {
-        String rId = SentValidation.required(runContext.render(contactId).as(String.class).orElse(null), "contactId");
+        var rId = SentValidation.required(runContext.render(contactId).as(String.class).orElse(null), "contactId");
         try (var client = client(runContext)) {
             return output(runContext, client.get(List.of("contacts", rId), Map.of()).data());
         }
