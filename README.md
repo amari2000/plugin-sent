@@ -96,6 +96,8 @@ Stop the disposable server with Ctrl-C afterwards. `server local` creates a loca
 
 The credentials in that configuration are public dummy values, for this loopback-only disposable server. Do not use them for a deployed instance. The integration tests verify UTF-8/whitespace preservation, successful execution and trigger outputs, signature tampering, stale signatures, missing signatures, event filtering, malformed UTF-8, and non-UTF-8 charset rejection. They are separate from `test` because the Kestra webserver is not published as a Maven test dependency at 1.3.39.
 
+The `webhook-integration` job in the Main GitHub Actions workflow runs these seven tests automatically on pull requests and normal CI runs (unless tests are explicitly skipped via workflow dispatch). It builds the plugin with Java 21, verifies the pinned Kestra 1.3.39 release checksum, starts an isolated loopback-only server, waits for readiness, and runs `webhookIntegrationTest`. Test reports and server logs are uploaded even on failure, and the server is stopped on exit. This job uses no Sent credentials and does not contact the Sent API.
+
 * Full documentation can be found under: [kestra.io/docs](https://kestra.io/docs)
 * Documentation for developing a plugin is included in the [Plugin Developer Guide](https://kestra.io/docs/plugin-developer-guide/)
 
